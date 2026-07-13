@@ -34,6 +34,16 @@ SSRCS		:= vectors.S
 OBJS		:= $(patsubst %.c,$(BUILD)/ml/%.o,$(CSRCS)) \
 		   $(patsubst %.S,$(BUILD)/ml/%.o,$(SSRCS))
 
+# Original SGI sources (and port/patched copies), compiled with the
+# MIPSEL-n64 masquerade environment via scripts/tryc.sh
+SGI_SRCS	:= $(TOP)/irix/kern/os/main.c \
+		   $(PORT)/patched/printf.c \
+		   $(PORT)/stubs/sgi_glue.c \
+		   $(PORT)/stubs/libkern.c
+SGI_OBJS	:= $(BUILD)/sgi/main.o $(BUILD)/sgi/printf.o \
+		   $(BUILD)/sgi/sgi_glue.o $(BUILD)/sgi/libkern.o
+OBJS		+= $(SGI_OBJS) $(BUILD)/autostubs.o
+
 .PHONY: all iso run debug smoke clean
 
 all: $(ISO)
@@ -45,6 +55,22 @@ $(BUILD)/ml/%.o: $(ML)/%.c
 $(BUILD)/ml/%.o: $(ML)/%.S
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/sgi/main.o: $(TOP)/irix/kern/os/main.c
+	@mkdir -p $(dir $@)
+	$(PORT)/scripts/tryc.sh $< -o $@
+
+$(BUILD)/sgi/printf.o: $(PORT)/patched/printf.c
+	@mkdir -p $(dir $@)
+	$(PORT)/scripts/tryc.sh $< -o $@
+
+$(BUILD)/sgi/%.o: $(PORT)/stubs/%.c
+	@mkdir -p $(dir $@)
+	$(PORT)/scripts/tryc.sh $< -o $@
+
+$(BUILD)/autostubs.o: $(PORT)/stubs/autostubs.c
+	@mkdir -p $(dir $@)
+	$(PORT)/scripts/tryc.sh $< -o $@
 
 $(KERNEL): $(OBJS) $(PORT)/build/linker.ld
 	$(LD) $(LDFLAGS) $(OBJS) -o $@

@@ -168,6 +168,18 @@ kmain(void)
 		    kmem_arena_used() / 1024);
 	}
 
-	kprintf("\nM2 checkpoint reached: kmem_alloc live, halting.\n");
+	kprintf("\nM2 checkpoint reached: kmem_alloc live.\n\n");
+
+	/* ---- M3: hand off to IRIX's own main() ---- */
+	{
+		extern void port_pda_init(void);
+		extern void main(void);
+
+		port_pda_init();
+		kprintf("pda: mapped at PDAPAGE, thread0 installed\n");
+		kprintf("Entering irix/kern/os/main.c:main()...\n\n");
+		main();
+		kprintf("\nmain() returned — halting.\n");
+	}
 	cpu_halt();
 }

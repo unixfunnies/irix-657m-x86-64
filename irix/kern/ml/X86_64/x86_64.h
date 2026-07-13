@@ -118,7 +118,7 @@ void	gdt_init(void);
 
 /* trap.c */
 void	idt_init(void);
-void	panic(const char *msg, eframe_t *ef);
+void	ml_panic(const char *msg, eframe_t *ef);
 
 /* pmm.c */
 struct limine_memmap_response;

@@ -87,5 +87,16 @@ pmap_bootstrap(__u64 hhdm, __u64 kphys, __u64 kvirt, __u64 ksize,
 	    va += PAGESZ, pa += PAGESZ)
 		map_4k(va, pa);
 
+	/*
+	 * IRIX fixed-VA window: the kernel accesses its per-processor
+	 * data area (sys/immu.h PDAPAGE — 0xffffa000 or 0xffffc000
+	 * sign-extended, config-dependent) and the kernel-stack page
+	 * through fixed top-of-VA addresses.  MIPS wired TLB entries;
+	 * we back the whole 32K top window with real pages for cpu 0.
+	 */
+	for (va = 0xffffffffffff8000UL; va >= 0xffffffffffff8000UL &&
+	    va != 0; va += PAGESZ)
+		map_4k(va, pmm_alloc());
+
 	load_cr3(kpml4);
 }

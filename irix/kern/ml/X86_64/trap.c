@@ -64,7 +64,7 @@ idt_init(void)
 }
 
 void
-panic(const char *msg, eframe_t *ef)
+ml_panic(const char *msg, eframe_t *ef)
 {
 	kprintf("\nPANIC: %s\n", msg);
 	if (ef != 0) {
@@ -106,7 +106,7 @@ trap_dispatch(eframe_t *ef)
 		return;
 
 	default:
-		panic(ef->ef_vec < 22 ? trapnames[ef->ef_vec] :
+		ml_panic(ef->ef_vec < 22 ? trapnames[ef->ef_vec] :
 		    "unexpected trap", ef);
 	}
 }

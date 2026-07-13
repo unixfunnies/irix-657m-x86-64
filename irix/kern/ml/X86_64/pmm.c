@@ -54,7 +54,7 @@ pmm_alloc(void)
 	int i;
 
 	if (freelist == 0)
-		panic("pmm_alloc: out of physical memory", 0);
+		ml_panic("pmm_alloc: out of physical memory", 0);
 	pa = freelist;
 	p = p2v(pa);
 	freelist = *p;

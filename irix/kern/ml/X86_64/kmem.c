@@ -144,7 +144,7 @@ kmem_free(void *ptr, unsigned long size)
 		return;
 	b = (struct blk *)ptr - 1;
 	if (b->inuse != KM_MAGIC)
-		panic("kmem_free: bad or double free", 0);
+		ml_panic("kmem_free: bad or double free", 0);
 	b->inuse = 0;
 	arena_used -= b->size;
 

@@ -22,4 +22,12 @@
 /* MIPSpro memory-ordering intrinsic (MIPS 'sync' instruction) */
 #define __synchronize()		__sync_synchronize()
 
+/*
+ * sys/sbd.h only defines the TLB-size constants under a MIPS CPU select
+ * (R4000/R10000), which the port deliberately never sets.  The constant
+ * only sizes MIPS TLB-dump debug structures (sys/tlbdump.h); pin a value
+ * so those structs compile.  x86-64 has no software-visible TLB to dump.
+ */
+#define NTLBENTRIES		64
+
 #endif /* __MIPSPRO_COMPAT_H__ */
