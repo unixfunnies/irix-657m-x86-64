@@ -1,7 +1,7 @@
 # Original SGI kernel sources that cross-compile clean to x86-64
 # under the port build harness (port/scripts/tryc.sh). Regenerate:
 #   for f in irix/kern/os/*.c; do port/scripts/tryc.sh $f -o /dev/null; done
-# Generated at M2. A file here compiles; it is not yet linked or run.
+# A file here compiles; it is not yet linked or run.
 
 irix/kern/os/acct.c
 irix/kern/os/acl.c
@@ -43,6 +43,7 @@ irix/kern/os/mac_label.c
 irix/kern/os/malloc.c
 irix/kern/os/mload.c
 irix/kern/os/mmap.c
+irix/kern/os/move.c
 irix/kern/os/mtext.c
 irix/kern/os/name.c
 irix/kern/os/page.c

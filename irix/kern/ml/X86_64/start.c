@@ -62,6 +62,7 @@ kmain(void)
 	kprintf("IRIX Release 6.5.7m x86-64 port -- first light (M0)\n");
 	kprintf("Copyright 1987-2000 Silicon Graphics, Inc.\n");
 	kprintf("All Rights Reserved.\n");
+	kprintf("Copyright 2026 Mallorie G. & Contributors.\n");
 	kprintf("\n");
 
 	if (LIMINE_BASE_REVISION_SUPPORTED == 0) {
