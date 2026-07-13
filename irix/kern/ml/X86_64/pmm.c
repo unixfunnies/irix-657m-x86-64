@@ -23,7 +23,8 @@ p2v(__u64 pa)
 }
 
 void
-pmm_init(struct limine_memmap_response *mm, __u64 hhdm)
+pmm_init(struct limine_memmap_response *mm, __u64 hhdm,
+    __u64 skip_base, __u64 skip_size)
 {
 	__u64 i, pa;
 
@@ -35,6 +36,9 @@ pmm_init(struct limine_memmap_response *mm, __u64 hhdm)
 			continue;
 		for (pa = e->base; pa + PAGESZ <= e->base + e->length;
 		    pa += PAGESZ) {
+			/* skip the range handed to the kmem arena */
+			if (pa >= skip_base && pa < skip_base + skip_size)
+				continue;
 			*(__u64 *)p2v(pa) = freelist;
 			freelist = pa;
 			nfree++;

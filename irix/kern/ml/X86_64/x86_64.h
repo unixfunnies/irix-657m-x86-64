@@ -122,11 +122,23 @@ void	panic(const char *msg, eframe_t *ef);
 
 /* pmm.c */
 struct limine_memmap_response;
-void	pmm_init(struct limine_memmap_response *mm, __u64 hhdm);
+void	pmm_init(struct limine_memmap_response *mm, __u64 hhdm,
+	    __u64 skip_base, __u64 skip_size);
 __u64	pmm_alloc(void);		/* phys addr of a zeroed 4K page */
 void	pmm_free(__u64 pa);
 __u64	pmm_free_pages(void);
 __u64	pmm_total_pages(void);
+
+/* kmem.c — IRIX kmem_alloc contract, x86-64 implementation */
+void	kmem_reserve(struct limine_memmap_response *mm, __u64 hhdm,
+	    __u64 cap, __u64 *out_base, __u64 *out_size);
+void	*kmem_alloc(unsigned long size, int flags);
+void	*kmem_zalloc(unsigned long size, int flags);
+void	kmem_free(void *ptr, unsigned long size);
+void	*kmem_alloc_node(unsigned long size, int flags, int node);
+void	*kmem_zalloc_node(unsigned long size, int flags, int node);
+__u64	kmem_arena_used(void);
+__u64	kmem_arena_size(void);
 
 /* pmap_boot.c */
 void	pmap_bootstrap(__u64 hhdm, __u64 kphys, __u64 kvirt, __u64 ksize,

@@ -17,7 +17,7 @@ QPID=$!
 # Poll for the last checkpoint marker rather than sleeping blind.
 i=0
 while [ $i -lt 25 ]; do
-	if grep -q "M1 checkpoint reached" "$OUT" 2>/dev/null; then
+	if grep -q "M2 checkpoint reached" "$OUT" 2>/dev/null; then
 		break
 	fi
 	sleep 1
@@ -47,6 +47,13 @@ check "pmm: .* pages"
 check "pmap: kernel page tables active"
 check "timer: .* ticks at 100 Hz"
 check "M1 checkpoint reached"
+
+# --- M2 ---
+check "kmem: .* KB arena"
+check "kmem_zalloc zeroed: b\[0\]=0 b\[4095\]=0"
+check "reused, coalesce ok"
+check "kmem: all freed, used 0 KB"
+check "M2 checkpoint reached"
 
 echo "---- serial transcript ----"
 cat "$OUT"
