@@ -104,7 +104,13 @@ void	serial_early_init(void);
 void	serial_putc(char c);
 void	serial_puts(const char *s);
 
+/* fb.c */
+struct limine_framebuffer;
+int	fb_init(struct limine_framebuffer *lf);
+void	fb_putc(char c);
+
 /* kprintf.c */
+void	console_putc(char c);		/* fans out to serial + framebuffer */
 void	kprintf(const char *fmt, ...);
 
 /* gdt.c */

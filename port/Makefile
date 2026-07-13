@@ -28,7 +28,7 @@ CFLAGS		:= --target=x86_64-elf -std=gnu99 -g -O2 -pipe \
 LDFLAGS		:= -nostdlib -static -z max-page-size=0x1000 \
 		   -T $(PORT)/build/linker.ld
 
-CSRCS		:= start.c serial.c kprintf.c gdt.c trap.c pmm.c \
+CSRCS		:= start.c serial.c kprintf.c fb.c gdt.c trap.c pmm.c \
 		   pmap_boot.c apic.c
 SSRCS		:= vectors.S
 OBJS		:= $(patsubst %.c,$(BUILD)/ml/%.o,$(CSRCS)) \

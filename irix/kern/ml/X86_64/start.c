@@ -33,6 +33,12 @@ static volatile struct limine_memmap_request memmap_req = {
 };
 
 __attribute__((used, section(".limine_requests")))
+static volatile struct limine_framebuffer_request fb_req = {
+	.id = LIMINE_FRAMEBUFFER_REQUEST,
+	.revision = 0,
+};
+
+__attribute__((used, section(".limine_requests")))
 static volatile struct limine_hhdm_request hhdm_req = {
 	.id = LIMINE_HHDM_REQUEST,
 	.revision = 0,
@@ -57,6 +63,8 @@ kmain(void)
 	__u64 i;
 
 	serial_early_init();
+	if (fb_req.response != 0 && fb_req.response->framebuffer_count > 0)
+		fb_init(fb_req.response->framebuffers[0]);
 
 	kprintf("\n");
 	kprintf("IRIX Release 6.5.7m x86-64 port -- first light (M0)\n");

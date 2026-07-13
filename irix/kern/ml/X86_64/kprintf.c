@@ -9,6 +9,20 @@
 #include <stdarg.h>
 #include "x86_64.h"
 
+void
+console_putc(char c)
+{
+	serial_putc(c);
+	fb_putc(c);
+}
+
+static void
+console_puts(const char *s)
+{
+	while (*s)
+		console_putc(*s++);
+}
+
 static void
 prnum(unsigned long long v, unsigned base, int is_signed)
 {
@@ -17,7 +31,7 @@ prnum(unsigned long long v, unsigned base, int is_signed)
 	int i = 0;
 
 	if (is_signed && (long long)v < 0) {
-		serial_putc('-');
+		console_putc('-');
 		v = (unsigned long long)(-(long long)v);
 	}
 	do {
@@ -25,7 +39,7 @@ prnum(unsigned long long v, unsigned base, int is_signed)
 		v /= base;
 	} while (v != 0);
 	while (i > 0)
-		serial_putc(buf[--i]);
+		console_putc(buf[--i]);
 }
 
 void
@@ -39,7 +53,7 @@ kprintf(const char *fmt, ...)
 		int lcnt = 0;
 
 		if (*p != '%') {
-			serial_putc(*p);
+			console_putc(*p);
 			continue;
 		}
 		p++;
@@ -50,11 +64,11 @@ kprintf(const char *fmt, ...)
 		switch (*p) {
 		case 's': {
 			const char *s = va_arg(ap, const char *);
-			serial_puts(s != 0 ? s : "(null)");
+			console_puts(s != 0 ? s : "(null)");
 			break;
 		}
 		case 'c':
-			serial_putc((char)va_arg(ap, int));
+			console_putc((char)va_arg(ap, int));
 			break;
 		case 'd':
 		case 'i':
@@ -76,15 +90,15 @@ kprintf(const char *fmt, ...)
 				prnum(va_arg(ap, unsigned int), 16, 0);
 			break;
 		case 'p':
-			serial_puts("0x");
+			console_puts("0x");
 			prnum((unsigned long long)(__u64)va_arg(ap, void *), 16, 0);
 			break;
 		case '%':
-			serial_putc('%');
+			console_putc('%');
 			break;
 		default:
-			serial_putc('%');
-			serial_putc(*p);
+			console_putc('%');
+			console_putc(*p);
 			break;
 		}
 	}
