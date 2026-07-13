@@ -1,0 +1,1 @@
+../../../irix/kern/sys/alp.h
