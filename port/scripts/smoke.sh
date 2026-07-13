@@ -17,7 +17,7 @@ QPID=$!
 # Poll for the last checkpoint marker rather than sleeping blind.
 i=0
 while [ $i -lt 25 ]; do
-	if grep -q "M0 checkpoint reached" "$OUT" 2>/dev/null; then
+	if grep -q "M1 checkpoint reached" "$OUT" 2>/dev/null; then
 		break
 	fi
 	sleep 1
@@ -40,6 +40,13 @@ check() {
 check "IRIX Release 6.5.7m x86-64"
 check "Booted by Limine"
 check "M0 checkpoint reached"
+
+# --- M1 ---
+check "IDT ok"
+check "pmm: .* pages"
+check "pmap: kernel page tables active"
+check "timer: .* ticks at 100 Hz"
+check "M1 checkpoint reached"
 
 echo "---- serial transcript ----"
 cat "$OUT"

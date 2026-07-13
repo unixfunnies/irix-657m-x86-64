@@ -6,8 +6,9 @@
  * bootloader has already put us in 64-bit long mode with paging
  * enabled and the kernel mapped in the higher half.
  *
- * M0 scope: bring up the serial console, prove we are alive, report
- * what the bootloader handed us, and halt.
+ * M1 scope: own GDT/IDT, exception handling, physical allocator,
+ * our own page tables, and a calibrated LAPIC timer delivering
+ * interrupts — the primitives the MI IRIX code will sit on.
  */
 
 #include <limine.h>
@@ -32,6 +33,18 @@ static volatile struct limine_memmap_request memmap_req = {
 };
 
 __attribute__((used, section(".limine_requests")))
+static volatile struct limine_hhdm_request hhdm_req = {
+	.id = LIMINE_HHDM_REQUEST,
+	.revision = 0,
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_kernel_address_request kaddr_req = {
+	.id = LIMINE_KERNEL_ADDRESS_REQUEST,
+	.revision = 0,
+};
+
+__attribute__((used, section(".limine_requests_end")))
 static volatile LIMINE_REQUESTS_END_MARKER;
 
 extern char __kernel_start[], __kernel_end[];
@@ -39,6 +52,10 @@ extern char __kernel_start[], __kernel_end[];
 void
 kmain(void)
 {
+	struct limine_memmap_response *mm;
+	__u64 hhdm, usable, phys_top;
+	__u64 i;
+
 	serial_early_init();
 
 	kprintf("\n");
@@ -51,29 +68,61 @@ kmain(void)
 		kprintf("PANIC: Limine base revision not supported\n");
 		cpu_halt();
 	}
+	if (memmap_req.response == 0 || hhdm_req.response == 0 ||
+	    kaddr_req.response == 0) {
+		kprintf("PANIC: missing Limine responses\n");
+		cpu_halt();
+	}
 
 	if (bootloader_info_req.response != 0)
 		kprintf("Booted by %s %s (Limine protocol)\n",
 		    bootloader_info_req.response->name,
 		    bootloader_info_req.response->version);
 
-	kprintf("Kernel text: %p .. %p\n", __kernel_start, __kernel_end);
+	mm = memmap_req.response;
+	hhdm = hhdm_req.response->offset;
 
-	if (memmap_req.response != 0) {
-		struct limine_memmap_response *mm = memmap_req.response;
-		__u64 usable = 0;
-		__u64 i;
+	usable = 0;
+	phys_top = 0;
+	for (i = 0; i < mm->entry_count; i++) {
+		struct limine_memmap_entry *e = mm->entries[i];
 
-		for (i = 0; i < mm->entry_count; i++) {
-			if (mm->entries[i]->type == LIMINE_MEMMAP_USABLE)
-				usable += mm->entries[i]->length;
+		if (e->type == LIMINE_MEMMAP_USABLE) {
+			usable += e->length;
+			if (e->base + e->length > phys_top)
+				phys_top = e->base + e->length;
 		}
-		kprintf("Physical memory: %llu entries, %llu KB usable\n",
-		    mm->entry_count, usable / 1024);
 	}
+	kprintf("Physical memory: %llu entries, %llu KB usable\n",
+	    mm->entry_count, usable / 1024);
+	kprintf("M0 checkpoint reached: kernel alive on x86-64.\n\n");
 
-	kprintf("\n");
-	kprintf("M0 checkpoint reached: kernel alive on x86-64, halting.\n");
+	/* ---- M1: CPU bringup ---- */
 
+	gdt_init();
+	kprintf("gdt: kernel selectors loaded\n");
+
+	idt_init();
+	__asm__ __volatile__("int3");	/* IDT self-test (recoverable) */
+
+	pmm_init(mm, hhdm);
+	kprintf("pmm: %lu pages (%lu KB) on freelist\n",
+	    pmm_free_pages(), pmm_free_pages() * 4);
+
+	pmap_bootstrap(hhdm, kaddr_req.response->physical_base,
+	    (__u64)__kernel_start,
+	    (__u64)(__kernel_end - __kernel_start), phys_top);
+	kprintf("pmap: kernel page tables active (kphys=0x%lx, hhdm=0x%lx)\n",
+	    kaddr_req.response->physical_base, hhdm);
+
+	apic_init(hhdm);
+	sti();
+
+	while (timer_ticks < TIMER_HZ / 2)	/* half a second */
+		cpu_wait();
+	kprintf("timer: %lu ticks at %d Hz, interrupts live\n",
+	    timer_ticks, TIMER_HZ);
+
+	kprintf("\nM1 checkpoint reached: CPU bringup complete, halting.\n");
 	cpu_halt();
 }

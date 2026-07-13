@@ -28,14 +28,21 @@ CFLAGS		:= --target=x86_64-elf -std=gnu99 -g -O2 -pipe \
 LDFLAGS		:= -nostdlib -static -z max-page-size=0x1000 \
 		   -T $(PORT)/build/linker.ld
 
-SRCS		:= $(ML)/start.c $(ML)/serial.c $(ML)/kprintf.c
-OBJS		:= $(patsubst $(ML)/%.c,$(BUILD)/ml/%.o,$(SRCS))
+CSRCS		:= start.c serial.c kprintf.c gdt.c trap.c pmm.c \
+		   pmap_boot.c apic.c
+SSRCS		:= vectors.S
+OBJS		:= $(patsubst %.c,$(BUILD)/ml/%.o,$(CSRCS)) \
+		   $(patsubst %.S,$(BUILD)/ml/%.o,$(SSRCS))
 
 .PHONY: all iso run debug smoke clean
 
 all: $(ISO)
 
 $(BUILD)/ml/%.o: $(ML)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/ml/%.o: $(ML)/%.S
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 

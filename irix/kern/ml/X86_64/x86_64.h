@@ -3,7 +3,7 @@
  *
  * Low-level x86-64 primitives for the IRIX x86-64 port.
  * This is new code (no SGI/MIPS heritage) — the analog of what
- * sys/asm.h + sys/reg.h provided on MIPS.
+ * sys/asm.h + sys/reg.h + ml/spl.s provided on MIPS.
  */
 
 #ifndef __ML_X86_64_H__
@@ -13,6 +13,9 @@ typedef unsigned char	__u8;
 typedef unsigned short	__u16;
 typedef unsigned int	__u32;
 typedef unsigned long	__u64;
+typedef long		__s64;
+
+/* ---- port I/O ---- */
 
 static inline void
 outb(__u16 port, __u8 val)
@@ -28,12 +31,73 @@ inb(__u16 port)
 	return val;
 }
 
+/* ---- MSRs, control registers, flags ---- */
+
+static inline __u64
+rdmsr(__u32 msr)
+{
+	__u32 lo, hi;
+	__asm__ __volatile__("rdmsr" : "=a"(lo), "=d"(hi) : "c"(msr));
+	return ((__u64)hi << 32) | lo;
+}
+
+static inline void
+wrmsr(__u32 msr, __u64 val)
+{
+	__asm__ __volatile__("wrmsr" : :
+	    "a"((__u32)val), "d"((__u32)(val >> 32)), "c"(msr));
+}
+
+static inline void
+load_cr3(__u64 pa)
+{
+	__asm__ __volatile__("movq %0, %%cr3" : : "r"(pa) : "memory");
+}
+
+static inline __u64
+read_cr2(void)
+{
+	__u64 v;
+	__asm__ __volatile__("movq %%cr2, %0" : "=r"(v));
+	return v;
+}
+
+static inline void
+sti(void)
+{
+	__asm__ __volatile__("sti");
+}
+
+static inline void
+cli(void)
+{
+	__asm__ __volatile__("cli");
+}
+
+static inline void
+cpu_wait(void)
+{
+	__asm__ __volatile__("hlt");
+}
+
 static inline void
 cpu_halt(void)
 {
 	for (;;)
 		__asm__ __volatile__("cli; hlt");
 }
+
+/*
+ * Saved trap context.  Layout must match the push sequence in
+ * vectors.S exactly (this is the x86-64 'eframe').
+ */
+typedef struct eframe {
+	__u64	ef_r15, ef_r14, ef_r13, ef_r12, ef_r11, ef_r10, ef_r9, ef_r8;
+	__u64	ef_rdi, ef_rsi, ef_rbp, ef_rbx, ef_rdx, ef_rcx, ef_rax;
+	__u64	ef_vec;			/* vector number		*/
+	__u64	ef_err;			/* hw error code or 0		*/
+	__u64	ef_rip, ef_cs, ef_rflags, ef_rsp, ef_ss;
+} eframe_t;
 
 /* serial.c */
 void	serial_early_init(void);
@@ -42,5 +106,33 @@ void	serial_puts(const char *s);
 
 /* kprintf.c */
 void	kprintf(const char *fmt, ...);
+
+/* gdt.c */
+void	gdt_init(void);
+
+/* trap.c */
+void	idt_init(void);
+void	panic(const char *msg, eframe_t *ef);
+
+/* pmm.c */
+struct limine_memmap_response;
+void	pmm_init(struct limine_memmap_response *mm, __u64 hhdm);
+__u64	pmm_alloc(void);		/* phys addr of a zeroed 4K page */
+void	pmm_free(__u64 pa);
+__u64	pmm_free_pages(void);
+__u64	pmm_total_pages(void);
+
+/* pmap_boot.c */
+void	pmap_bootstrap(__u64 hhdm, __u64 kphys, __u64 kvirt, __u64 ksize,
+	    __u64 phys_top);
+
+/* apic.c */
+void	apic_init(__u64 hhdm);
+void	lapic_eoi(void);
+extern volatile __u64 timer_ticks;
+
+#define TIMER_HZ	100
+#define VEC_TIMER	32
+#define VEC_SPURIOUS	255
 
 #endif /* __ML_X86_64_H__ */
