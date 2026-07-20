@@ -179,7 +179,12 @@ kmain(void)
 		kprintf("pda: mapped at PDAPAGE, thread0 installed\n");
 		kprintf("Entering irix/kern/os/main.c:main()...\n\n");
 		main();
-		kprintf("\nmain() returned — halting.\n");
+		kprintf("\nmain() returned (init handoff is stubbed).\n\n");
 	}
+
+	/* ---- M4: demonstrate the x86-64 kernel-thread scheduler ---- */
+	sched_demo();
+
+	kprintf("\nM4 checkpoint reached: scheduler live, halting.\n");
 	cpu_halt();
 }

@@ -149,6 +149,14 @@ void	apic_init(__u64 hhdm);
 void	lapic_eoi(void);
 extern volatile __u64 timer_ticks;
 
+/* sched.c — minimal x86-64 kernel-thread scheduler */
+int	kthread_spawn(const char *name, void (*entry)(void *), void *arg);
+void	sched_yield(void);
+void	thread_exit(void);
+void	sched_tick(void);
+void	sched_run(void);
+void	sched_demo(void);
+
 #define TIMER_HZ	100
 #define VEC_TIMER	32
 #define VEC_SPURIOUS	255

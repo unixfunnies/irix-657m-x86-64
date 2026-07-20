@@ -17,7 +17,7 @@ QPID=$!
 # Poll for the last checkpoint marker rather than sleeping blind.
 i=0
 while [ $i -lt 25 ]; do
-	if grep -q "main() returned" "$OUT" 2>/dev/null; then
+	if grep -q "M4 checkpoint reached" "$OUT" 2>/dev/null; then
 		break
 	fi
 	sleep 1
@@ -65,6 +65,33 @@ check "1 CPU(s)"
 check "memfs: synthetic root mounted"
 check "Root on device memfs (fstype memfs)"
 check "main() returned"
+
+# --- M4: kernel-thread scheduler ---
+check "coop A: round 0"
+check "coop C: done"
+check "cooperative switching ok"
+check "spin X: done"
+check "spin Y: done"
+check "preemptive switching ok"
+check "M4 checkpoint reached"
+
+# preemption proof: the two non-yielding spinners must interleave, i.e.
+# the second spinner makes progress before the first one finishes.
+if awk '
+	/spin X: progress/ { if (!xseen++) xfirst=NR }
+	/spin Y: progress/ { if (!yseen++) yfirst=NR }
+	/spin X: done/     { xdone=NR }
+	/spin Y: done/     { ydone=NR }
+	END {
+		# interleaved if each thread first-progressed before the
+		# other thread finished
+		exit !(xfirst < ydone && yfirst < xdone)
+	}' "$OUT"; then
+	echo "PASS: spinners interleave (preemption confirmed)"
+else
+	echo "FAIL: spinners did not interleave (no preemption)"
+	fail=1
+fi
 
 echo "---- serial transcript ----"
 cat "$OUT"

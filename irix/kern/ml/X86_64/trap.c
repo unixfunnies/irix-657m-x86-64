@@ -99,7 +99,8 @@ trap_dispatch(eframe_t *ef)
 
 	case VEC_TIMER:
 		timer_ticks++;
-		lapic_eoi();
+		lapic_eoi();		/* EOI before any preemptive switch */
+		sched_tick();		/* may ctx_switch to another thread */
 		return;
 
 	case VEC_SPURIOUS:
