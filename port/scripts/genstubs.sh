@@ -34,8 +34,14 @@ mkdir -p obj
 scripts/tryc.sh "$PWD/$AUTOC" -o "$PWD/obj/autostubs.o" || exit 1
 
 for pass in $(seq 1 40); do
-	UND=$(ld.lld -nostdlib -static -z max-page-size=0x1000 \
-		-T build/linker.ld $OBJS obj/autostubs.o -o /dev/null 2>&1 |
+	ERRS=$(ld.lld -nostdlib -static -z max-page-size=0x1000 \
+		-T build/linker.ld $OBJS obj/autostubs.o -o /dev/null 2>&1)
+	# a duplicate (or any non-undefined) error is a real problem, not closure
+	if echo "$ERRS" | grep -q 'duplicate symbol'; then
+		echo "DUPLICATE SYMBOL — fix before stubbing:"; \
+		echo "$ERRS" | grep -A2 'duplicate symbol' | head -12; exit 1
+	fi
+	UND=$(echo "$ERRS" |
 		sed -n 's/.*undefined symbol: \([A-Za-z_][A-Za-z0-9_]*\).*/\1/p' |
 		sort -u)
 	[ -z "$UND" ] && { echo "LINK CLOSED after $((pass-1)) passes"; exit 0; }

@@ -9,7 +9,7 @@ exec clang --target=x86_64-elf -std=gnu99 -g -O1 \
 	-mno-80387 -mno-mmx -mno-sse -mno-sse2 \
 	-mno-red-zone -mcmodel=kernel \
 	-Wno-everything \
-	-D_KERNEL \
+	-D_KERNEL -D_SGI_SOURCE \
 	-D__mips=3 -D_MIPS_ISA=3 -D_MIPS_SIM=3 \
 	-D_MIPS_SZLONG=64 -D_MIPS_SZINT=32 -D_MIPS_SZPTR=64 \
 	-D_MIPS_FPSET=32 -D_MIPSEL -D_LANGUAGE_C=1 -D_LONGLONG \

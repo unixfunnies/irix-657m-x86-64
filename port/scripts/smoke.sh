@@ -17,7 +17,7 @@ QPID=$!
 # Poll for the last checkpoint marker rather than sleeping blind.
 i=0
 while [ $i -lt 25 ]; do
-	if grep -q "Root on device" "$OUT" 2>/dev/null; then
+	if grep -q "main() returned" "$OUT" 2>/dev/null; then
 		break
 	fi
 	sleep 1
@@ -55,13 +55,16 @@ check "reused, coalesce ok"
 check "kmem: all freed, used 0 KB"
 check "M2 checkpoint reached"
 
-# --- M3: IRIX main() runs to the rootfs boundary ---
+# --- M3: IRIX main() runs ---
 check "Entering irix/kern/os/main.c:main()"
 check "IRIX Release 6.5.7m IP99 Version .* System V - 64 Bit"
 check "Total real memory  = [1-9]"
 check "1 CPU(s)"
-check "vfs_mountroot"
-check "Root on device"
+
+# --- M6: root filesystem mounts, main() completes ---
+check "memfs: synthetic root mounted"
+check "Root on device memfs (fstype memfs)"
+check "main() returned"
 
 echo "---- serial transcript ----"
 cat "$OUT"

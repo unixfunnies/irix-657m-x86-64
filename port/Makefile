@@ -34,15 +34,18 @@ SSRCS		:= vectors.S
 OBJS		:= $(patsubst %.c,$(BUILD)/ml/%.o,$(CSRCS)) \
 		   $(patsubst %.S,$(BUILD)/ml/%.o,$(SSRCS))
 
-# Original SGI sources (and port/patched copies), compiled with the
-# MIPSEL-n64 masquerade environment via scripts/tryc.sh
-SGI_SRCS	:= $(TOP)/irix/kern/os/main.c \
-		   $(PORT)/patched/printf.c \
-		   $(PORT)/stubs/sgi_glue.c \
-		   $(PORT)/stubs/libkern.c
-SGI_OBJS	:= $(BUILD)/sgi/main.o $(BUILD)/sgi/printf.o \
-		   $(BUILD)/sgi/sgi_glue.o $(BUILD)/sgi/libkern.o
-OBJS		+= $(SGI_OBJS) $(BUILD)/autostubs.o
+# Original SGI kernel sources adopted as-is, compiled from their home
+# directories with the MIPSEL-n64 masquerade via scripts/tryc.sh.
+# OS_SRCS name files under irix/kern/os/ (built to obj/sgi/<name>.o).
+OS_SRCS		:= main.c vfs.c behavior.c fs_subr.c
+OS_OBJS		:= $(patsubst %.c,$(BUILD)/sgi/%.o,$(OS_SRCS))
+
+# Port-authored / patched SGI-environment sources
+PORT_SGI_OBJS	:= $(BUILD)/sgi/printf.o \
+		   $(BUILD)/sgi/sgi_glue.o \
+		   $(BUILD)/sgi/libkern.o \
+		   $(BUILD)/sgi/memfs.o
+OBJS		+= $(OS_OBJS) $(PORT_SGI_OBJS) $(BUILD)/autostubs.o
 
 .PHONY: all iso run debug smoke clean
 
@@ -56,17 +59,29 @@ $(BUILD)/ml/%.o: $(ML)/%.S
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/sgi/main.o: $(TOP)/irix/kern/os/main.c
+# adopted-as-is os/ sources
+$(BUILD)/sgi/%.o: $(TOP)/irix/kern/os/%.c
 	@mkdir -p $(dir $@)
 	$(PORT)/scripts/tryc.sh $< -o $@
 
+# patched copies win over the os/ rule (printf.c lives in both)
 $(BUILD)/sgi/printf.o: $(PORT)/patched/printf.c
+	@mkdir -p $(dir $@)
+	$(PORT)/scripts/tryc.sh $< -o $@
+
+# port-authored filesystem sources
+$(BUILD)/sgi/%.o: $(PORT)/fs/%.c
 	@mkdir -p $(dir $@)
 	$(PORT)/scripts/tryc.sh $< -o $@
 
 $(BUILD)/sgi/%.o: $(PORT)/stubs/%.c
 	@mkdir -p $(dir $@)
 	$(PORT)/scripts/tryc.sh $< -o $@
+
+# autostubs.c is generated (gitignored). If absent, close the link by
+# harvesting undefined symbols into it; genstubs.sh writes the .o too.
+$(PORT)/stubs/autostubs.c:
+	$(PORT)/scripts/genstubs.sh $(filter %.o,$(OBJS))
 
 $(BUILD)/autostubs.o: $(PORT)/stubs/autostubs.c
 	@mkdir -p $(dir $@)

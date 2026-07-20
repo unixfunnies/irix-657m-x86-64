@@ -130,3 +130,96 @@ char	*bootswapfile = "";
 char	*bootdumpfile = "";
 unsigned char miniroot = 0;
 int	maxcpus = 1;
+
+/* ---- filesystem switch (lboot-generated; the port registers memfs) ---- */
+
+#include <sys/vfs.h>
+#include <sys/vnode.h>
+
+extern vfsops_t	memfs_vfsops;
+extern vnodeops_t memfs_vnodeops;
+/* vfs_strayops is defined by the real vfs.c */
+
+/*
+ * vfssw[]: index 0 is BADVFS (filled by vfsinit), index 1 is memfs.
+ * rootfstype defaults to "memfs" so vfs_mountroot() selects it directly.
+ */
+struct vfssw vfssw[] = {
+	{ "BADVFS", 0, 0, 0, 0, 0 },
+	{ "memfs",  0, &memfs_vfsops, &memfs_vnodeops, 0, 0 },
+};
+int	vfsmax = sizeof(vfssw) / sizeof(vfssw[0]);
+int	nfstype;			/* set by vfsinit() = vfsmax	*/
+
+dev_t	rootdev;
+char	rootfstype[16] = "memfs";
+vnode_t	*rootdir;			/* memfs_rootinit() sets this	*/
+
+/*
+ * kmem_zone_init: vfsinit() ASSERTs the pathname zone is non-NULL.
+ * The real zone/slab allocator is future work (M2 note); for now hand
+ * back a small tag object so zone-based callers get a valid handle.
+ * kmem_zone_alloc/zalloc fall through to the general kmem allocator.
+ */
+extern void *kmem_alloc(unsigned long, int);
+extern void *kmem_zalloc(unsigned long, int);
+
+struct zone_stub { int z_size; char *z_name; };
+
+void *
+kmem_zone_init(int size, char *name)
+{
+	struct zone_stub *z = kmem_alloc(sizeof(*z), 0);
+	z->z_size = size;
+	z->z_name = name;
+	return z;
+}
+
+void *
+kmem_zone_alloc(void *zone, int flags)
+{
+	return kmem_alloc(((struct zone_stub *)zone)->z_size, flags);
+}
+
+/*
+ * kvpalloc(npgs, flags, color): allocate npgs pages of kernel virtual
+ * memory.  The real IRIX kvpalloc maps fresh pages into the kernel's
+ * mapped region (kseg2) via the page tables; here we hand back
+ * contiguous direct-mapped (HHDM/kseg0) memory from the kmem arena,
+ * which is a valid kernel VA and satisfies the "want N zeroed pages"
+ * contract its callers rely on.
+ */
+void *
+kvpalloc(unsigned int npgs, int flags, int color)
+{
+	return kmem_zalloc((unsigned long)npgs * NBPP, 0);
+}
+
+void *
+kmem_zone_zalloc(void *zone, int flags)
+{
+	return kmem_zalloc(((struct zone_stub *)zone)->z_size, flags);
+}
+
+/* ---- device-name rendering for cmn_err %V (Root on device ...) ---- */
+
+char *
+dev_to_name(dev_t dev, char *buf, unsigned int len)
+{
+	/* minimal: render "memfs" for the synthetic root, else maj/min */
+	if (dev == rootdev)
+		strncpy(buf, "memfs", len);
+	else {
+		/* "0x%x" without stdio: tiny hex formatter */
+		static const char hx[] = "0123456789abcdef";
+		char *p = buf;
+		int i, started = 0;
+		*p++ = '0'; *p++ = 'x';
+		for (i = 28; i >= 0; i -= 4) {
+			int nyb = (dev >> i) & 0xf;
+			if (nyb || started || i == 0) { *p++ = hx[nyb]; started = 1; }
+		}
+		*p = 0;
+	}
+	return buf;
+}

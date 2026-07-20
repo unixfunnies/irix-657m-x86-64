@@ -1,10 +1,11 @@
 # Original SGI kernel sources that cross-compile clean to x86-64
 # under the port build harness (port/scripts/tryc.sh). Regenerate:
 #   for f in irix/kern/os/*.c; do port/scripts/tryc.sh $f -o /dev/null; done
-# A file here compiles; it is not yet linked or run.
+# A file here compiles; it is not necessarily linked or run.
 
 irix/kern/os/acct.c
 irix/kern/os/acl.c
+irix/kern/os/arsess.c
 irix/kern/os/avl.c
 irix/kern/os/behavior.c
 irix/kern/os/bitmasks.c
@@ -12,18 +13,23 @@ irix/kern/os/cache.c
 irix/kern/os/cap_able.c
 irix/kern/os/cap_mac_access.c
 irix/kern/os/capability.c
-irix/kern/os/cred.c
+irix/kern/os/clock.c
 irix/kern/os/dba.c
 irix/kern/os/dnlc.c
 irix/kern/os/eag.c
+irix/kern/os/elf.c
+irix/kern/os/exec.c
+irix/kern/os/exit.c
 irix/kern/os/fdt.c
 irix/kern/os/fio.c
 irix/kern/os/flock.c
-irix/kern/os/flock_new.c
 irix/kern/os/fork.c
+irix/kern/os/fs_subr.c
+irix/kern/os/fuexarg.c
 irix/kern/os/grow.c
 irix/kern/os/inf_add_label.c
 irix/kern/os/inf_dom.c
+irix/kern/os/intp.c
 irix/kern/os/invent.c
 irix/kern/os/kabi.c
 irix/kern/os/klistio.c
@@ -40,6 +46,8 @@ irix/kern/os/mac_dom.c
 irix/kern/os/mac_dup.c
 irix/kern/os/mac_invalid.c
 irix/kern/os/mac_label.c
+irix/kern/os/machdep.c
+irix/kern/os/main.c
 irix/kern/os/malloc.c
 irix/kern/os/mload.c
 irix/kern/os/mmap.c
@@ -49,30 +57,42 @@ irix/kern/os/name.c
 irix/kern/os/page.c
 irix/kern/os/pathname.c
 irix/kern/os/pda.c
-irix/kern/os/physio.c
 irix/kern/os/pipe.c
-irix/kern/os/printf.c
 irix/kern/os/procset.c
+irix/kern/os/prsched.c
 irix/kern/os/prsgi.c
 irix/kern/os/ptimers.c
-irix/kern/os/rmap.c
+irix/kern/os/resource.c
 irix/kern/os/sat.c
+irix/kern/os/scalls.c
+irix/kern/os/sched.c
+irix/kern/os/shm_syscalls.c
+irix/kern/os/sig.c
 irix/kern/os/slp.c
+irix/kern/os/space.c
+irix/kern/os/startup.c
 irix/kern/os/sthread.c
+irix/kern/os/subr.c
 irix/kern/os/suser.c
-irix/kern/os/swtch.c
 irix/kern/os/sysent.c
+irix/kern/os/sysget.c
 irix/kern/os/sysmips.c
+irix/kern/os/sysmp.c
+irix/kern/os/syssgi.c
+irix/kern/os/thread.c
 irix/kern/os/tile.c
 irix/kern/os/time.c
 irix/kern/os/timers.c
+irix/kern/os/trap.c
 irix/kern/os/tstamp.c
 irix/kern/os/uidact.c
 irix/kern/os/uli.c
 irix/kern/os/uncintf.c
+irix/kern/os/uthread.c
 irix/kern/os/utrace.c
+irix/kern/os/utssys.c
 irix/kern/os/uuid.c
-irix/kern/os/vmdump.c
+irix/kern/os/vfs.c
 irix/kern/os/vn_passthru.c
 irix/kern/os/vncalls.c
 irix/kern/os/vnode.c
