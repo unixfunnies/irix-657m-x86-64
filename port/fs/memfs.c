@@ -12,10 +12,12 @@
  * vnode, and sets rootdir/rootdev/rootfstype.  This carries main() past
  * the "Root on device" boundary it currently panics at.
  *
- * File contents come later (M6+/M7): once exec/open paths exist, memfs
- * grows real directory entries and vnode ops, or gives way to efs on a
- * ramdisk.  For now the root exists but is empty; nothing reads it before
- * the process/exec milestone.
+ * As of M7 memfs is a genuinely readable (if tiny) filesystem: it serves
+ * one regular file, "init" (a real ELF64 executable), through real vnode
+ * ops.  VOP_LOOKUP on the root returns the file vnode; VOP_READ streams
+ * its bytes via uiomove; VOP_GETATTR reports type/size.  The port ELF
+ * loader (exec_elf.c) reads the binary through exactly these ops -- the
+ * real IRIX VFS dispatch path (VN_BHV -> bd_ops) -- to exec it in ring 3.
  *
  * Compiled with the SGI header environment (scripts/tryc.sh) so every
  * struct layout matches the kernel it links against.
@@ -29,20 +31,29 @@
 #include <sys/vfs.h>
 #include <sys/vnode.h>
 #include <sys/statvfs.h>
+#include <sys/uio.h>
 #include <sys/fs_subr.h>
 #include <ksys/behavior.h>
+#include "init_elf.h"			/* the "init" ELF file contents	*/
 
 #define MEMFS_DEV	makedev(0, 1)	/* synthetic root device */
 #define MEMFS_BSIZE	4096
+#define MEMFS_FILENAME	"init"
 
 extern vnodeops_t	memfs_vnodeops;
 extern vfsops_t		memfs_vfsops;
 
-/* the single root mount + its behavior descriptors (only one memfs) */
+/*
+ * memfs holds one directory (root) and one file ("init").  Each vnode
+ * carries a behavior descriptor bound to memfs_vnodeops; the file's bytes
+ * are the embedded init_elf[].  A real memfs would key a table of these.
+ */
 static struct memfs_mount {
 	bhv_desc_t	m_vfsbhv;	/* behavior on the vfs chain	*/
-	bhv_desc_t	m_vnbhv;	/* behavior on the root vnode	*/
+	bhv_desc_t	m_rootbhv;	/* behavior on the root vnode	*/
+	bhv_desc_t	m_filebhv;	/* behavior on the file vnode	*/
 	vnode_t		m_rootvp;	/* the root directory vnode	*/
+	vnode_t		m_filevp;	/* the "init" file vnode	*/
 } memfs;
 
 /* ---- vfs ops ---- */
@@ -51,6 +62,7 @@ static int
 memfs_rootinit(struct vfs *vfsp)
 {
 	vnode_t *rvp = &memfs.m_rootvp;
+	vnode_t *fvp = &memfs.m_filevp;
 
 	/* attach memfs behavior/ops to the root vfs behavior chain */
 	vfs_insertbhv(vfsp, &memfs.m_vfsbhv, &memfs_vfsops, &memfs);
@@ -67,14 +79,25 @@ memfs_rootinit(struct vfs *vfsp)
 	rvp->v_number = 1;
 	rvp->v_flag = VROOT;
 	vn_bhv_head_init(VN_BHV_HEAD(rvp), "memfs");
-	bhv_desc_init(&memfs.m_vnbhv, &memfs, rvp, &memfs_vnodeops);
-	vn_bhv_insert_initial(VN_BHV_HEAD(rvp), &memfs.m_vnbhv);
+	bhv_desc_init(&memfs.m_rootbhv, &memfs, rvp, &memfs_vnodeops);
+	vn_bhv_insert_initial(VN_BHV_HEAD(rvp), &memfs.m_rootbhv);
+
+	/* build the "init" regular-file vnode */
+	bzero(fvp, sizeof(*fvp));
+	fvp->v_vfsp = vfsp;
+	fvp->v_type = VREG;
+	fvp->v_count = 1;
+	fvp->v_number = 2;
+	vn_bhv_head_init(VN_BHV_HEAD(fvp), "memfs");
+	bhv_desc_init(&memfs.m_filebhv, &memfs, fvp, &memfs_vnodeops);
+	vn_bhv_insert_initial(VN_BHV_HEAD(fvp), &memfs.m_filebhv);
 
 	rootdir = rvp;
 	rootdev = MEMFS_DEV;
 	strcpy(rootfstype, "memfs");
 
-	cmn_err(CE_CONT, "memfs: synthetic root mounted\n");
+	cmn_err(CE_CONT, "memfs: synthetic root mounted (1 file: %s, %d bytes)\n",
+	    MEMFS_FILENAME, (int)sizeof(init_elf));
 	return 0;
 }
 
@@ -127,12 +150,65 @@ vfsops_t memfs_vfsops = {
 	(int (*)())fs_nosys,	/* vfs_quotactl		*/
 };
 
+/* ---- vnode ops ---- */
+
+/* VOP_LOOKUP on the root dir: only "init" exists */
+static int
+memfs_lookup(bhv_desc_t *bdp, char *name, vnode_t **vpp,
+    struct pathname *pnp, int flags, vnode_t *rdir, struct cred *cr)
+{
+	if (strcmp(name, MEMFS_FILENAME) == 0) {
+		VN_HOLD(&memfs.m_filevp);
+		*vpp = &memfs.m_filevp;
+		return 0;
+	}
+	*vpp = NULL;
+	return ENOENT;
+}
+
+/* VOP_READ on the "init" file: stream init_elf[] via uiomove */
+static int
+memfs_read(bhv_desc_t *bdp, struct uio *uiop, int ioflag, struct cred *cr,
+    struct flid *fl)
+{
+	off_t off = uiop->uio_offset;
+	ssize_t avail;
+
+	if (off < 0 || off > (off_t)sizeof(init_elf))
+		return EINVAL;
+	avail = (ssize_t)sizeof(init_elf) - off;
+	if (avail <= 0)
+		return 0;			/* EOF */
+	if (avail > uiop->uio_resid)
+		avail = uiop->uio_resid;
+	return uiomove((char *)init_elf + off, avail, UIO_READ, uiop);
+}
+
+/* VOP_GETATTR: report type and size for root (dir) or file */
+static int
+memfs_getattr(bhv_desc_t *bdp, struct vattr *vap, int flags, struct cred *cr)
+{
+	vnode_t *vp = BHV_TO_VNODE(bdp);
+
+	vap->va_type = vp->v_type;
+	vap->va_mode = (vp->v_type == VDIR) ? 0555 : 0555;
+	vap->va_nlink = 1;
+	vap->va_uid = 0;
+	vap->va_gid = 0;
+	vap->va_size = (vp->v_type == VREG) ? sizeof(init_elf) : MEMFS_BSIZE;
+	vap->va_blksize = MEMFS_BSIZE;
+	return 0;
+}
+
 /*
- * Root vnode ops.  Left zero (all NULL) apart from the behavior-chain
- * position: on the M6 boot path nothing invokes a VOP on the root before
- * the process/exec milestone, so no op is exercised yet.  Real ops
- * (lookup/getattr/open/read...) arrive with the file layer.
+ * memfs vnode ops.  Only the read path the ELF loader needs is real
+ * (lookup/read/getattr); the rest stay NULL (never invoked on this path).
+ * Designated initializers keep field placement correct against the large
+ * vnodeops_t.
  */
 vnodeops_t memfs_vnodeops = {
-	BHV_IDENTITY_INIT_POSITION(VNODE_POSITION_BASE),
+	.vn_position = BHV_IDENTITY_INIT_POSITION(VNODE_POSITION_BASE),
+	.vop_lookup  = memfs_lookup,
+	.vop_read    = memfs_read,
+	.vop_getattr = memfs_getattr,
 };

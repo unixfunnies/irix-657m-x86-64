@@ -121,6 +121,7 @@ void	tss_set_rsp0(__u64 rsp0);
 long	syscall_dispatch(__u64 nr, __u64 a0, __u64 a1, __u64 a2,
 	    __u64 a3, __u64 a4);
 void	usermode_demo(void);
+void	exec_init_demo(void);
 
 /* trap.c */
 void	idt_init(void);

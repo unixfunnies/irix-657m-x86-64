@@ -118,3 +118,36 @@ usermode_demo(void)
 	    (syscall_caller_cs & 3) == 3 ? "ring 3 confirmed" : "NOT ring 3");
 	kprintf("user->kernel syscall round trip ok\n");
 }
+
+/* M7: read a real ELF ("/init") from memfs through the VFS and exec it */
+extern int	elf_load_init(__u64 upml4, __u64 *entry_out);
+
+void
+exec_init_demo(void)
+{
+	__u64 upml4, entry;
+	char *kstack;
+
+	kprintf("M7: exec /init — a real ELF loaded from memfs via the VFS\n\n");
+
+	kstack = kmem_alloc(KSTACK_SIZE, 0);
+	tss_set_rsp0((__u64)kstack + KSTACK_SIZE);
+	kern_pml4 = pmap_kernel_pml4();
+
+	/* fresh address space; the ELF loader maps its PT_LOAD segments */
+	upml4 = pmap_new_user_as();
+	if (elf_load_init(upml4, &entry) != 0) {
+		kprintf("exec: could not load /init\n");
+		return;
+	}
+	/* user stack */
+	pmap_alloc_user_page(upml4, USER_STACK_TOP - 4096, 1);
+
+	user_exited = 0;
+	kprintf("\nentering ring 3 at ELF entry 0x%lx\n\n", entry);
+	enter_usermode(entry, USER_STACK_TOP - 16, upml4, &user_ksp_save);
+
+	kprintf("\nback in kernel: /init exited (status %d)\n",
+	    user_exit_status);
+	kprintf("exec of a real ELF from the filesystem ok\n");
+}

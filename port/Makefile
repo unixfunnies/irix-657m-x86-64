@@ -37,14 +37,15 @@ OBJS		:= $(patsubst %.c,$(BUILD)/ml/%.o,$(CSRCS)) \
 # Original SGI kernel sources adopted as-is, compiled from their home
 # directories with the MIPSEL-n64 masquerade via scripts/tryc.sh.
 # OS_SRCS name files under irix/kern/os/ (built to obj/sgi/<name>.o).
-OS_SRCS		:= main.c vfs.c behavior.c fs_subr.c
+OS_SRCS		:= main.c vfs.c behavior.c fs_subr.c move.c
 OS_OBJS		:= $(patsubst %.c,$(BUILD)/sgi/%.o,$(OS_SRCS))
 
 # Port-authored / patched SGI-environment sources
 PORT_SGI_OBJS	:= $(BUILD)/sgi/printf.o \
 		   $(BUILD)/sgi/sgi_glue.o \
 		   $(BUILD)/sgi/libkern.o \
-		   $(BUILD)/sgi/memfs.o
+		   $(BUILD)/sgi/memfs.o \
+		   $(BUILD)/sgi/exec_elf.o
 OBJS		+= $(OS_OBJS) $(PORT_SGI_OBJS) $(BUILD)/autostubs.o
 
 .PHONY: all iso run debug smoke clean

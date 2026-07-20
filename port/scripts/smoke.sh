@@ -17,7 +17,7 @@ QPID=$!
 # Poll for the last checkpoint marker rather than sleeping blind.
 i=0
 while [ $i -lt 25 ]; do
-	if grep -q "M5 checkpoint reached" "$OUT" 2>/dev/null; then
+	if grep -q "M7 checkpoint reached" "$OUT" 2>/dev/null; then
 		break
 	fi
 	sleep 1
@@ -99,6 +99,14 @@ check "Hello from x86-64 user mode (ring 3)"
 check "ring 3 confirmed"
 check "user->kernel syscall round trip ok"
 check "M5 checkpoint reached"
+
+# --- M7: real exec (ELF loaded from memfs via the VFS) ---
+check "reading ELF via VOP_READ"
+check "PT_LOAD vaddr=0x400000"
+check "init: real ELF loaded from memfs via the VFS"
+check "/init exited (status 7)"
+check "exec of a real ELF from the filesystem ok"
+check "M7 checkpoint reached"
 
 echo "---- serial transcript ----"
 cat "$OUT"

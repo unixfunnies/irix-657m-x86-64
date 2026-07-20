@@ -188,7 +188,11 @@ kmain(void)
 
 	/* ---- M5: demonstrate ring-3 user mode + syscalls ---- */
 	usermode_demo();
+	kprintf("\nM5 checkpoint reached: user mode live.\n\n");
 
-	kprintf("\nM5 checkpoint reached: user mode live, halting.\n");
+	/* ---- M7: exec a real ELF loaded from the filesystem ---- */
+	exec_init_demo();
+
+	kprintf("\nM7 checkpoint reached: exec from filesystem live, halting.\n");
 	cpu_halt();
 }
