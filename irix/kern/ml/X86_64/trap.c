@@ -26,6 +26,8 @@ static struct idtent idt[256];
 
 extern __u64 trap_vectbl[48];
 extern __u64 trap_vec_spurious[1];
+extern __u64 trap_vec_syscall[1];
+extern __u64 syscall_caller_cs;		/* usermode.c: CS at last int 0x80 */
 
 static const char *trapnames[] = {
 	"divide error", "debug", "NMI", "breakpoint",
@@ -37,15 +39,21 @@ static const char *trapnames[] = {
 };
 
 static void
-idt_set(int vec, __u64 handler)
+idt_set_dpl(int vec, __u64 handler, int dpl)
 {
 	idt[vec].off_lo = handler & 0xffff;
 	idt[vec].sel = 0x08;		/* kernel code selector	*/
 	idt[vec].ist = 0;
-	idt[vec].type = 0x8e;		/* present, DPL0, interrupt gate */
+	idt[vec].type = 0x8e | (dpl << 5);	/* present, interrupt gate */
 	idt[vec].off_mid = (handler >> 16) & 0xffff;
 	idt[vec].off_hi = handler >> 32;
 	idt[vec].rsvd = 0;
+}
+
+static void
+idt_set(int vec, __u64 handler)
+{
+	idt_set_dpl(vec, handler, 0);
 }
 
 void
@@ -57,6 +65,8 @@ idt_init(void)
 	for (i = 0; i < 48; i++)
 		idt_set(i, trap_vectbl[i]);
 	idt_set(VEC_SPURIOUS, trap_vec_spurious[0]);
+	/* int 0x80 syscall gate: DPL 3 so ring-3 code may invoke it */
+	idt_set_dpl(VEC_SYSCALL, trap_vec_syscall[0], 3);
 
 	idtr.limit = sizeof(idt) - 1;
 	idtr.base = (__u64)idt;
@@ -104,6 +114,19 @@ trap_dispatch(eframe_t *ef)
 		return;
 
 	case VEC_SPURIOUS:
+		return;
+
+	case VEC_SYSCALL:		/* int 0x80 from ring 3 */
+		/*
+		 * Syscall args arrive in the saved GPRs; the return value
+		 * goes back in ef_rax, which iretq restores.  This is the
+		 * x86-64 analog of the MIPS syscall exception path; the real
+		 * IRIX syscallsw dispatch is grafted on with vproc (post-M5).
+		 * ef_cs records the caller's privilege (CPL 3 = ring 3).
+		 */
+		syscall_caller_cs = ef->ef_cs;
+		ef->ef_rax = syscall_dispatch(ef->ef_rax, ef->ef_rdi,
+		    ef->ef_rsi, ef->ef_rdx, ef->ef_r10, ef->ef_r8);
 		return;
 
 	default:

@@ -33,6 +33,9 @@ vec\n:
 
 	TRAPVEC	255
 
+	/* int 0x80 system-call gate (installed at DPL 3 in idt_init) */
+	TRAPVEC	128
+
 	.align 16
 trap_entry:
 	pushq	%rax
@@ -84,3 +87,7 @@ trap_vectbl:
 	.globl	trap_vec_spurious
 trap_vec_spurious:
 	VECPTR	255
+
+	.globl	trap_vec_syscall
+trap_vec_syscall:
+	VECPTR	128

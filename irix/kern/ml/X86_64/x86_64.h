@@ -115,6 +115,12 @@ void	kprintf(const char *fmt, ...);
 
 /* gdt.c */
 void	gdt_init(void);
+void	tss_set_rsp0(__u64 rsp0);
+
+/* usermode.c */
+long	syscall_dispatch(__u64 nr, __u64 a0, __u64 a1, __u64 a2,
+	    __u64 a3, __u64 a4);
+void	usermode_demo(void);
 
 /* trap.c */
 void	idt_init(void);
@@ -143,6 +149,12 @@ __u64	kmem_arena_size(void);
 /* pmap_boot.c */
 void	pmap_bootstrap(__u64 hhdm, __u64 kphys, __u64 kvirt, __u64 ksize,
 	    __u64 phys_top);
+__u64	pmap_kernel_pml4(void);
+__u64	pmap_new_user_as(void);
+void	pmap_map_user(__u64 pml4, __u64 va, __u64 pa, int writable);
+__u64	pmap_alloc_user_page(__u64 pml4, __u64 va, int writable);
+void	pmap_switch(__u64 pml4_phys);
+void	*pmap_phys_to_kv(__u64 pa);
 
 /* apic.c */
 void	apic_init(__u64 hhdm);
@@ -159,6 +171,7 @@ void	sched_demo(void);
 
 #define TIMER_HZ	100
 #define VEC_TIMER	32
+#define VEC_SYSCALL	128		/* int 0x80 system-call gate	*/
 #define VEC_SPURIOUS	255
 
 #endif /* __ML_X86_64_H__ */

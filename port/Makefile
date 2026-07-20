@@ -29,7 +29,7 @@ LDFLAGS		:= -nostdlib -static -z max-page-size=0x1000 \
 		   -T $(PORT)/build/linker.ld
 
 CSRCS		:= start.c serial.c kprintf.c fb.c gdt.c trap.c pmm.c \
-		   pmap_boot.c apic.c kmem.c sched.c
+		   pmap_boot.c apic.c kmem.c sched.c usermode.c
 SSRCS		:= vectors.S ctxsw.S
 OBJS		:= $(patsubst %.c,$(BUILD)/ml/%.o,$(CSRCS)) \
 		   $(patsubst %.S,$(BUILD)/ml/%.o,$(SSRCS))

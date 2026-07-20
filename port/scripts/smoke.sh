@@ -17,7 +17,7 @@ QPID=$!
 # Poll for the last checkpoint marker rather than sleeping blind.
 i=0
 while [ $i -lt 25 ]; do
-	if grep -q "M4 checkpoint reached" "$OUT" 2>/dev/null; then
+	if grep -q "M5 checkpoint reached" "$OUT" 2>/dev/null; then
 		break
 	fi
 	sleep 1
@@ -92,6 +92,13 @@ else
 	echo "FAIL: spinners did not interleave (no preemption)"
 	fail=1
 fi
+
+# --- M5: ring-3 user mode + syscalls ---
+check "entering ring 3"
+check "Hello from x86-64 user mode (ring 3)"
+check "ring 3 confirmed"
+check "user->kernel syscall round trip ok"
+check "M5 checkpoint reached"
 
 echo "---- serial transcript ----"
 cat "$OUT"

@@ -184,7 +184,11 @@ kmain(void)
 
 	/* ---- M4: demonstrate the x86-64 kernel-thread scheduler ---- */
 	sched_demo();
+	kprintf("\nM4 checkpoint reached: scheduler live.\n\n");
 
-	kprintf("\nM4 checkpoint reached: scheduler live, halting.\n");
+	/* ---- M5: demonstrate ring-3 user mode + syscalls ---- */
+	usermode_demo();
+
+	kprintf("\nM5 checkpoint reached: user mode live, halting.\n");
 	cpu_halt();
 }
