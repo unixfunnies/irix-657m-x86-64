@@ -190,9 +190,11 @@ kmain(void)
 	usermode_demo();
 	kprintf("\nM5 checkpoint reached: user mode live.\n\n");
 
-	/* ---- M7: exec a real ELF loaded from the filesystem ---- */
+	/* ---- M7: exec a real ELF from the filesystem, which is also
+	   ---- M8: a real userland program using the syscall surface ---- */
 	exec_init_demo();
 
-	kprintf("\nM7 checkpoint reached: exec from filesystem live, halting.\n");
+	kprintf("\nM8 checkpoint reached: syscall surface + real userland live, "
+	    "halting.\n");
 	cpu_halt();
 }

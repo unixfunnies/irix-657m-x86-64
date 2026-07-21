@@ -48,10 +48,77 @@ static int	user_exited;
 static int	user_exit_status;
 __u64		syscall_caller_cs;	/* CS at last int 0x80 (trap.c sets) */
 
+/* additional syscall numbers (SYS_write=1, SYS_exit=2 from the header) */
+#define SYS_read	3
+#define SYS_open	4
+#define SYS_close	5
+#define SYS_lseek	6
+#define SYS_fstat	7
+#define SYS_getpid	9
+
+/* file syscalls that need the VFS live in usyscall.c (SGI env) */
+extern long	usys_open(__u64 upath, int flags);
+extern long	usys_read(int fd, __u64 ubuf, __u64 len);
+extern long	usys_close(int fd);
+extern long	usys_lseek(int fd, long off, int whence);
+extern long	usys_fstat(int fd, __u64 ubuf);
+
+/* pmap_boot.c: validate a user range in the active address space */
+extern int	pmap_user_range_ok(__u64 va, __u64 len, int need_write);
+
+/*
+ * copyin/copyout — the only sanctioned way for the kernel to touch user
+ * memory.  During a syscall CR3 is the user address space, so after
+ * validating the range we can move bytes directly; the validation is what
+ * keeps a bad user pointer from faulting the kernel.
+ */
+int
+uva_copyin(__u64 uaddr, void *kdst, __u64 len)
+{
+	const char *s = (const char *)uaddr;
+	char *d = kdst;
+	__u64 i;
+
+	if (!pmap_user_range_ok(uaddr, len, 0))
+		return -1;
+	for (i = 0; i < len; i++)
+		d[i] = s[i];
+	return 0;
+}
+
+int
+uva_copyout(const void *ksrc, __u64 uaddr, __u64 len)
+{
+	const char *s = ksrc;
+	char *d = (char *)uaddr;
+	__u64 i;
+
+	if (!pmap_user_range_ok(uaddr, len, 1))
+		return -1;
+	for (i = 0; i < len; i++)
+		d[i] = s[i];
+	return 0;
+}
+
+/* copy a NUL-terminated string in from user space, bounded by max */
+int
+uva_copyinstr(__u64 uaddr, char *kdst, __u64 max)
+{
+	__u64 i;
+
+	for (i = 0; i < max; i++) {
+		if (!pmap_user_range_ok(uaddr + i, 1, 0))
+			return -1;
+		kdst[i] = ((const char *)uaddr)[i];
+		if (kdst[i] == '\0')
+			return 0;
+	}
+	return -1;			/* not terminated within max */
+}
+
 /*
  * System-call dispatcher, called from trap.c on int 0x80.  Args are the
- * user's rdi/rsi/rdx/...; during the trap CR3 is still the user address
- * space, so user pointers are directly readable (no copyin machinery yet).
+ * user's rdi/rsi/rdx/r10/r8; the return value goes back in rax.
  */
 long
 syscall_dispatch(__u64 nr, __u64 a0, __u64 a1, __u64 a2, __u64 a3, __u64 a4)
@@ -60,11 +127,21 @@ syscall_dispatch(__u64 nr, __u64 a0, __u64 a1, __u64 a2, __u64 a3, __u64 a4)
 	(void)a4;
 	switch (nr) {
 	case SYS_write: {			/* write(fd, buf, len)	*/
-		const char *buf = (const char *)a1;
-		__u64 len = a2, i;
+		char kbuf[256];
+		__u64 off = 0, len = a2;
 
-		for (i = 0; i < len; i++)
-			console_putc(buf[i]);
+		if (a0 != 1 && a0 != 2)		/* only stdout/stderr	*/
+			return -1;
+		while (off < len) {		/* stream in bounded chunks */
+			__u64 n = len - off, i;
+			if (n > sizeof(kbuf))
+				n = sizeof(kbuf);
+			if (uva_copyin(a1 + off, kbuf, n) != 0)
+				return -1;
+			for (i = 0; i < n; i++)
+				console_putc(kbuf[i]);
+			off += n;
+		}
 		return (long)len;
 	}
 	case SYS_exit:				/* exit(status)		*/
@@ -73,6 +150,18 @@ syscall_dispatch(__u64 nr, __u64 a0, __u64 a1, __u64 a2, __u64 a3, __u64 a4)
 		leave_usermode(user_ksp_save, kern_pml4);
 		/* NOTREACHED */
 		return 0;
+	case SYS_open:				/* open(path, flags)	*/
+		return usys_open(a0, (int)a1);
+	case SYS_read:				/* read(fd, buf, len)	*/
+		return usys_read((int)a0, a1, a2);
+	case SYS_close:				/* close(fd)		*/
+		return usys_close((int)a0);
+	case SYS_lseek:				/* lseek(fd, off, whence) */
+		return usys_lseek((int)a0, (long)a1, (int)a2);
+	case SYS_fstat:				/* fstat(fd, statbuf)	*/
+		return usys_fstat((int)a0, a1);
+	case SYS_getpid:			/* getpid()		*/
+		return 1;			/* single process for now */
 	default:
 		kprintf("syscall: unknown nr %lu\n", nr);
 		return -1;
@@ -128,7 +217,8 @@ exec_init_demo(void)
 	__u64 upml4, entry;
 	char *kstack;
 
-	kprintf("M7: exec /init — a real ELF loaded from memfs via the VFS\n\n");
+	kprintf("M7/M8: exec /init -- a real compiled C program "
+	    "(crt0 + libc) loaded from memfs\n\n");
 
 	kstack = kmem_alloc(KSTACK_SIZE, 0);
 	tss_set_rsp0((__u64)kstack + KSTACK_SIZE);

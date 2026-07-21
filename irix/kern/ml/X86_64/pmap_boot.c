@@ -123,6 +123,57 @@ pmap_switch(__u64 pml4_phys)
 	load_cr3(pml4_phys);
 }
 
+#define USER_LIMIT	0x0000800000000000UL	/* top of the user half	*/
+
+/* read an existing PTE for va without allocating; 0 if not present */
+static __u64
+pte_lookup(__u64 pml4, __u64 va)
+{
+	__u64 table = pml4;
+	int lvl;
+
+	for (lvl = 3; lvl > 0; lvl--) {
+		__u64 e = p2v(table)[PIDX(va, lvl)];
+
+		if ((e & PG_P) == 0)
+			return 0;
+		if (e & PG_PS)
+			return e;		/* large page */
+		table = e & ~0xfffUL;
+	}
+	return p2v(table)[PIDX(va, 0)];
+}
+
+/*
+ * Validate that [va, va+len) lies entirely in the user half and every
+ * page is present + user-accessible (+ writable if need_write) in the
+ * currently active address space.  This is what makes copyin/copyout
+ * safe against a hostile or buggy user pointer.
+ */
+int
+pmap_user_range_ok(__u64 va, __u64 len, int need_write)
+{
+	__u64 cr3, pml4, p, end = va + len;
+
+	if (len == 0)
+		return 1;
+	if (end < va || va >= USER_LIMIT || end > USER_LIMIT)
+		return 0;			/* wrap or not in user half */
+
+	__asm__ __volatile__("movq %%cr3, %0" : "=r"(cr3));
+	pml4 = cr3 & ~0xfffUL;
+
+	for (p = va & ~0xfffUL; p < end; p += PAGESZ) {
+		__u64 e = pte_lookup(pml4, p);
+
+		if ((e & PG_P) == 0 || (e & PG_U) == 0)
+			return 0;
+		if (need_write && (e & PG_W) == 0)
+			return 0;
+	}
+	return 1;
+}
+
 /* kernel virtual address of a physical page (for filling user pages) */
 void *
 pmap_phys_to_kv(__u64 pa)

@@ -34,26 +34,38 @@
 #include <sys/uio.h>
 #include <sys/fs_subr.h>
 #include <ksys/behavior.h>
-#include "init_elf.h"			/* the "init" ELF file contents	*/
+#include "init_elf.h"			/* the "init" program (ELF)	*/
+#include "motd.h"			/* the "motd" data file		*/
 
 #define MEMFS_DEV	makedev(0, 1)	/* synthetic root device */
 #define MEMFS_BSIZE	4096
-#define MEMFS_FILENAME	"init"
 
 extern vnodeops_t	memfs_vnodeops;
 extern vfsops_t		memfs_vfsops;
 
 /*
- * memfs holds one directory (root) and one file ("init").  Each vnode
- * carries a behavior descriptor bound to memfs_vnodeops; the file's bytes
- * are the embedded init_elf[].  A real memfs would key a table of these.
+ * memfs holds one directory (root) and a small table of regular files.
+ * Each file vnode carries a behavior descriptor whose private data points
+ * at its memfs_file entry, so the vnode ops recover the backing bytes.
  */
+struct memfs_file {
+	const char		*name;
+	const unsigned char	*data;
+	unsigned		size;
+	vnode_t			vp;
+	bhv_desc_t		bhv;
+};
+
+static struct memfs_file mfiles[] = {
+	{ "init", init_elf, sizeof(init_elf) },
+	{ "motd", motd_txt, sizeof(motd_txt) },
+};
+#define NMFILES		((int)(sizeof(mfiles) / sizeof(mfiles[0])))
+
 static struct memfs_mount {
 	bhv_desc_t	m_vfsbhv;	/* behavior on the vfs chain	*/
 	bhv_desc_t	m_rootbhv;	/* behavior on the root vnode	*/
-	bhv_desc_t	m_filebhv;	/* behavior on the file vnode	*/
 	vnode_t		m_rootvp;	/* the root directory vnode	*/
-	vnode_t		m_filevp;	/* the "init" file vnode	*/
 } memfs;
 
 /* ---- vfs ops ---- */
@@ -62,7 +74,7 @@ static int
 memfs_rootinit(struct vfs *vfsp)
 {
 	vnode_t *rvp = &memfs.m_rootvp;
-	vnode_t *fvp = &memfs.m_filevp;
+	int i;
 
 	/* attach memfs behavior/ops to the root vfs behavior chain */
 	vfs_insertbhv(vfsp, &memfs.m_vfsbhv, &memfs_vfsops, &memfs);
@@ -82,22 +94,25 @@ memfs_rootinit(struct vfs *vfsp)
 	bhv_desc_init(&memfs.m_rootbhv, &memfs, rvp, &memfs_vnodeops);
 	vn_bhv_insert_initial(VN_BHV_HEAD(rvp), &memfs.m_rootbhv);
 
-	/* build the "init" regular-file vnode */
-	bzero(fvp, sizeof(*fvp));
-	fvp->v_vfsp = vfsp;
-	fvp->v_type = VREG;
-	fvp->v_count = 1;
-	fvp->v_number = 2;
-	vn_bhv_head_init(VN_BHV_HEAD(fvp), "memfs");
-	bhv_desc_init(&memfs.m_filebhv, &memfs, fvp, &memfs_vnodeops);
-	vn_bhv_insert_initial(VN_BHV_HEAD(fvp), &memfs.m_filebhv);
+	/* build a vnode for each regular file; bd_pdata -> its table entry */
+	for (i = 0; i < NMFILES; i++) {
+		vnode_t *fvp = &mfiles[i].vp;
+
+		bzero(fvp, sizeof(*fvp));
+		fvp->v_vfsp = vfsp;
+		fvp->v_type = VREG;
+		fvp->v_count = 1;
+		fvp->v_number = i + 2;
+		vn_bhv_head_init(VN_BHV_HEAD(fvp), "memfs");
+		bhv_desc_init(&mfiles[i].bhv, &mfiles[i], fvp, &memfs_vnodeops);
+		vn_bhv_insert_initial(VN_BHV_HEAD(fvp), &mfiles[i].bhv);
+	}
 
 	rootdir = rvp;
 	rootdev = MEMFS_DEV;
 	strcpy(rootfstype, "memfs");
 
-	cmn_err(CE_CONT, "memfs: synthetic root mounted (1 file: %s, %d bytes)\n",
-	    MEMFS_FILENAME, (int)sizeof(init_elf));
+	cmn_err(CE_CONT, "memfs: synthetic root mounted (%d files)\n", NMFILES);
 	return 0;
 }
 
@@ -152,50 +167,58 @@ vfsops_t memfs_vfsops = {
 
 /* ---- vnode ops ---- */
 
-/* VOP_LOOKUP on the root dir: only "init" exists */
+/* VOP_LOOKUP on the root dir: search the file table by name */
 static int
 memfs_lookup(bhv_desc_t *bdp, char *name, vnode_t **vpp,
     struct pathname *pnp, int flags, vnode_t *rdir, struct cred *cr)
 {
-	if (strcmp(name, MEMFS_FILENAME) == 0) {
-		VN_HOLD(&memfs.m_filevp);
-		*vpp = &memfs.m_filevp;
-		return 0;
+	int i;
+
+	for (i = 0; i < NMFILES; i++) {
+		if (strcmp(name, mfiles[i].name) == 0) {
+			VN_HOLD(&mfiles[i].vp);
+			*vpp = &mfiles[i].vp;
+			return 0;
+		}
 	}
 	*vpp = NULL;
 	return ENOENT;
 }
 
-/* VOP_READ on the "init" file: stream init_elf[] via uiomove */
+/* VOP_READ on a file: stream its bytes via uiomove */
 static int
 memfs_read(bhv_desc_t *bdp, struct uio *uiop, int ioflag, struct cred *cr,
     struct flid *fl)
 {
+	struct memfs_file *f = (struct memfs_file *)bdp->bd_pdata;
 	off_t off = uiop->uio_offset;
 	ssize_t avail;
 
-	if (off < 0 || off > (off_t)sizeof(init_elf))
+	if (off < 0 || off > (off_t)f->size)
 		return EINVAL;
-	avail = (ssize_t)sizeof(init_elf) - off;
+	avail = (ssize_t)f->size - off;
 	if (avail <= 0)
 		return 0;			/* EOF */
 	if (avail > uiop->uio_resid)
 		avail = uiop->uio_resid;
-	return uiomove((char *)init_elf + off, avail, UIO_READ, uiop);
+	return uiomove((char *)f->data + off, avail, UIO_READ, uiop);
 }
 
-/* VOP_GETATTR: report type and size for root (dir) or file */
+/* VOP_GETATTR: report type and size for root (dir) or a file */
 static int
 memfs_getattr(bhv_desc_t *bdp, struct vattr *vap, int flags, struct cred *cr)
 {
 	vnode_t *vp = BHV_TO_VNODE(bdp);
 
 	vap->va_type = vp->v_type;
-	vap->va_mode = (vp->v_type == VDIR) ? 0555 : 0555;
+	vap->va_mode = 0555;
 	vap->va_nlink = 1;
 	vap->va_uid = 0;
 	vap->va_gid = 0;
-	vap->va_size = (vp->v_type == VREG) ? sizeof(init_elf) : MEMFS_BSIZE;
+	if (vp->v_type == VREG)
+		vap->va_size = ((struct memfs_file *)bdp->bd_pdata)->size;
+	else
+		vap->va_size = MEMFS_BSIZE;
 	vap->va_blksize = MEMFS_BSIZE;
 	return 0;
 }

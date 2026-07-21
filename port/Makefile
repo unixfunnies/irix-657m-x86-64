@@ -45,7 +45,8 @@ PORT_SGI_OBJS	:= $(BUILD)/sgi/printf.o \
 		   $(BUILD)/sgi/sgi_glue.o \
 		   $(BUILD)/sgi/libkern.o \
 		   $(BUILD)/sgi/memfs.o \
-		   $(BUILD)/sgi/exec_elf.o
+		   $(BUILD)/sgi/exec_elf.o \
+		   $(BUILD)/sgi/usyscall.o
 OBJS		+= $(OS_OBJS) $(PORT_SGI_OBJS) $(BUILD)/autostubs.o
 
 .PHONY: all iso run debug smoke clean
