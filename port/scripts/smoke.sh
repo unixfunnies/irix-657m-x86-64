@@ -17,7 +17,7 @@ QPID=$!
 # Poll for the last checkpoint marker rather than sleeping blind.
 i=0
 while [ $i -lt 25 ]; do
-	if grep -q "M8 checkpoint reached" "$OUT" 2>/dev/null; then
+	if grep -q "M9 checkpoint reached" "$OUT" 2>/dev/null; then
 		break
 	fi
 	sleep 1
@@ -112,6 +112,13 @@ check "Welcome to IRIX 6.5.7m on x86-64"
 check "read through the VFS"
 check "syscalls (getpid/open/fstat/read/write/close) ok"
 check "M8 checkpoint reached"
+
+# --- M9: a genuine IRIX command (echo) runs with real argv ---
+check "exec /echo -- the genuine eoe/cmd/echo.c"
+check "/echo found, reading ELF via VOP_READ"
+check "hello, from real IRIX echo(1) running in ring 3 on x86-64!"
+check "real IRIX command ran in ring 3"
+check "M9 checkpoint reached"
 
 echo "---- serial transcript ----"
 cat "$OUT"

@@ -35,6 +35,7 @@
 #include <sys/fs_subr.h>
 #include <ksys/behavior.h>
 #include "init_elf.h"			/* the "init" program (ELF)	*/
+#include "echo_elf.h"			/* the real IRIX echo (ELF)	*/
 #include "motd.h"			/* the "motd" data file		*/
 
 #define MEMFS_DEV	makedev(0, 1)	/* synthetic root device */
@@ -58,6 +59,7 @@ struct memfs_file {
 
 static struct memfs_file mfiles[] = {
 	{ "init", init_elf, sizeof(init_elf) },
+	{ "echo", echo_elf, sizeof(echo_elf) },
 	{ "motd", motd_txt, sizeof(motd_txt) },
 };
 #define NMFILES		((int)(sizeof(mfiles) / sizeof(mfiles[0])))

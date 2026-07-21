@@ -1,20 +1,23 @@
 #!/bin/sh
-# Build the M8 userland (crt0 + ulibc + init.c) into a compact ELF64 and
-# regenerate the memfs file headers (init program + motd data file).
-# Run from anywhere; writes port/fs/{init_elf.h,motd.h}.
+# Build the port userland into compact ELF64 executables and regenerate the
+# memfs file headers.  Programs: init.c (ours) and the genuine IRIX
+# eoe/cmd/echo/echo.c, both linked against crt0 + ulibc.  Writes
+# port/fs/{init_elf.h,echo_elf.h,motd.h}.  Run from anywhere.
 set -e
 cd "$(dirname "$0")"
 UDIR=$(pwd)
 FS=$UDIR/../fs
+TOP=$UDIR/../..
 
-CC="clang --target=x86_64-elf -nostdlib -ffreestanding -fno-stack-protector \
-    -fno-pic -mno-red-zone -mno-sse -O2 -c"
+CC="clang --target=x86_64-elf -std=gnu89 -nostdlib -nostdlibinc -ffreestanding \
+    -fno-stack-protector -fno-pic -mno-red-zone -mno-sse -O2 -Dsgi \
+    -I$UDIR/include -c"
 
 $CC crt0.S  -o /tmp/crt0.o
 $CC ulibc.c -o /tmp/ulibc.o
 $CC init.c  -o /tmp/uinit.o
+$CC "$TOP/eoe/cmd/echo/echo.c" -o /tmp/uecho.o
 
-# link at 0x400000, one compact PT_LOAD (reuse the ml linker script shape)
 cat > /tmp/user.ld <<'EOF'
 ENTRY(_start)
 PHDRS { load PT_LOAD FLAGS(7); }
@@ -27,8 +30,13 @@ SECTIONS {
   /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
 }
 EOF
-ld.lld -T /tmp/user.ld -z max-page-size=0x1000 -n \
-    /tmp/crt0.o /tmp/ulibc.o /tmp/uinit.o -o /tmp/init.elf
+
+link() {	# $1=program.o $2=out.elf
+	ld.lld -T /tmp/user.ld -z max-page-size=0x1000 -n \
+	    /tmp/crt0.o /tmp/ulibc.o "$1" -o "$2"
+}
+link /tmp/uinit.o /tmp/init.elf
+link /tmp/uecho.o /tmp/echo.elf
 
 emit_bytes() {	# $1=infile $2=cvar $3=outheader $4=guard
 	{
@@ -44,10 +52,10 @@ emit_bytes() {	# $1=infile $2=cvar $3=outheader $4=guard
 }
 
 emit_bytes /tmp/init.elf init_elf "$FS/init_elf.h" __MEMFS_INIT_ELF_H
+emit_bytes /tmp/echo.elf echo_elf "$FS/echo_elf.h" __MEMFS_ECHO_ELF_H
 
 printf 'Welcome to IRIX 6.5.7m on x86-64.\nThis file lives in memfs and was read through the VFS.\n' \
     > /tmp/motd.txt
 emit_bytes /tmp/motd.txt motd_txt "$FS/motd.h" __MEMFS_MOTD_H
 
-echo "init.elf: $(wc -c < /tmp/init.elf) bytes, entry $(llvm-readelf -h /tmp/init.elf | awk '/Entry/{print $NF}')"
-echo "motd: $(wc -c < /tmp/motd.txt) bytes"
+echo "init.elf: $(wc -c < /tmp/init.elf) bytes | echo.elf: $(wc -c < /tmp/echo.elf) bytes (real IRIX echo.c)"

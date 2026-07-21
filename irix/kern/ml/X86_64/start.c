@@ -193,8 +193,12 @@ kmain(void)
 	/* ---- M7: exec a real ELF from the filesystem, which is also
 	   ---- M8: a real userland program using the syscall surface ---- */
 	exec_init_demo();
+	kprintf("\nM8 checkpoint reached: syscall surface + real userland live.\n\n");
 
-	kprintf("\nM8 checkpoint reached: syscall surface + real userland live, "
+	/* ---- M9: exec a genuine IRIX command (echo) with real argv ---- */
+	exec_echo_demo();
+
+	kprintf("\nM9 checkpoint reached: a real IRIX command ran in ring 3, "
 	    "halting.\n");
 	cpu_halt();
 }

@@ -132,11 +132,11 @@ load_segment(vnode_t *vp, unsigned long upml4, Elf64_Phdr *ph)
 }
 
 /*
- * elf_load_init: look up "init" in the root fs, parse it, and map it into
- * the given user address space.  Returns 0 and *entry_out on success.
+ * elf_load: look up `name` in the root fs, parse it, and map it into the
+ * given user address space.  Returns 0 and *entry_out on success.
  */
 int
-elf_load_init(unsigned long upml4, unsigned long *entry_out)
+elf_load(const char *name, unsigned long upml4, unsigned long *entry_out)
 {
 	vnode_t *rootvp, *filevp;
 	Elf64_Ehdr eh;
@@ -149,12 +149,12 @@ elf_load_init(unsigned long upml4, unsigned long *entry_out)
 		return error;
 	}
 
-	VOP_LOOKUP(rootvp, "init", &filevp, NULL, 0, NULL, NULL, error);
+	VOP_LOOKUP(rootvp, (char *)name, &filevp, NULL, 0, NULL, NULL, error);
 	if (error) {
-		cmn_err(CE_CONT, "exec: lookup /init failed (%d)\n", error);
+		cmn_err(CE_CONT, "exec: lookup /%s failed (%d)\n", name, error);
 		return error;
 	}
-	cmn_err(CE_CONT, "exec: /init found, reading ELF via VOP_READ\n");
+	cmn_err(CE_CONT, "exec: /%s found, reading ELF via VOP_READ\n", name);
 
 	n = vn_pread(filevp, &eh, sizeof(eh), 0);
 	if (n < (int)sizeof(eh))
@@ -187,6 +187,6 @@ elf_load_init(unsigned long upml4, unsigned long *entry_out)
 	}
 
 	*entry_out = eh.e_entry;
-	cmn_err(CE_CONT, "exec: /init loaded, entry 0x%lx\n", eh.e_entry);
+	cmn_err(CE_CONT, "exec: /%s loaded, entry 0x%lx\n", name, eh.e_entry);
 	return 0;
 }

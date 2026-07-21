@@ -6,7 +6,8 @@
  * the first genuinely capable process, built from ordinary C.
  */
 
-#include "ulibc.h"
+#include <stdio.h>
+#include <unistd.h>
 
 int
 main(void)
